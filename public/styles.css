@@ -1,0 +1,261 @@
+/* ===== Global base ===== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+/* === Landing page body (React) === */
+body {
+  background: radial-gradient(circle at top, #222 0, #111 40%, #050505 100%);
+  color: #f7f7f7;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ===== Landing page layout ===== */
+.container {
+  max-width: 960px;
+  width: 100%;
+  padding: 2rem;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+header h1 {
+  font-size: 2.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.subtitle {
+  color: #aaa;
+  font-size: 0.95rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+
+/* ===== Cards ===== */
+.card {
+  background: rgba(20, 20, 20, 0.95);
+  border-radius: 1.25rem;
+  padding: 1.6rem;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.card h2 {
+  font-size: 1.3rem;
+  margin-bottom: 0.75rem;
+}
+
+.card p {
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: #ccc;
+  margin-bottom: 1.25rem;
+}
+
+/* ===== Buttons ===== */
+.btn {
+  display: inline-block;
+  padding: 0.6rem 1.1rem;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+  background: linear-gradient(135deg, #6366f1, #ec4899);
+  color: #fff;
+  transition: transform 0.15s ease, box-shadow 0.15s ease,
+    filter 0.15s ease;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+  box-shadow: 0 16px 35px rgba(0, 0, 0, 0.7);
+}
+
+.btn.wide {
+  width: 100%;
+  text-align: center;
+}
+
+/* ===== Footer ===== */
+footer {
+  margin-top: 2rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #777;
+}
+
+/* ===== Inner pages (login, comments, admin) ===== */
+/* These are rendered directly from app.js with <body class="page"> */
+
+.page {
+  background: radial-gradient(circle at top, #222 0, #111 40%, #050505 100%);
+  color: #f7f7f7;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.page-container {
+  width: 100%;
+  max-width: 900px;
+  padding: 2rem 1.5rem 3rem;
+}
+
+.card-page {
+  margin-top: 1rem;
+}
+
+.page-title {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.page-subtitle {
+  color: #aaa;
+  margin-bottom: 1.5rem;
+}
+
+.section-title {
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Back link */
+.back-link {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  text-decoration: none;
+  color: #a5b4fc;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+/* Forms */
+.form {
+  margin-top: 1rem;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.form-group label {
+  font-size: 0.9rem;
+}
+
+.input,
+.textarea {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(15, 15, 15, 0.95);
+  color: #f7f7f7;
+  outline: none;
+}
+
+.input:focus,
+.textarea:focus {
+  border-color: #6366f1;
+}
+
+.textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+/* Comments list */
+.comment-list {
+  list-style: none;
+  margin-top: 0.5rem;
+  margin-bottom: 1.5rem;
+  padding-left: 0;
+}
+
+.comment-item {
+  padding: 0.6rem 0.75rem;
+  background: rgba(10, 10, 10, 0.9);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.comment-item.empty {
+  text-align: center;
+  color: #888;
+}
+
+/* Table for admin panel */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}
+
+.table th,
+.table td {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0.6rem 0.75rem;
+}
+
+.table th {
+  background: rgba(30, 30, 30, 0.95);
+  text-align: left;
+}
+
+.table tr:nth-child(even) td {
+  background: rgba(15, 15, 15, 0.95);
+}
+
+/* Hint text */
+.hint {
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.hint code {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+}
+
+.tag {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  margin-left: 0.4rem;
+}
+
+.tag-warned {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(248, 113, 113, 0.6);
+  color: #fecaca;
+}

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Mini Feedback System</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!-- React + ReactDOM via CDN -->
+    <script
+      src="https://unpkg.com/react@18/umd/react.development.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
+      crossorigin
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Our React code -->
+    <script type="text/babel">
+      const Card = ({ title, description, link, linkText }) => (
+        <div className="card">
+          <h2>{title}</h2>
+          <p>{description}</p>
+          <a href={link} className="btn">
+            {linkText}
+          </a>
+        </div>
+      );
+
+      const App = () => (
+        <div className="container">
+          <header>
+            <h1>Mini Feedback System</h1>
+            <p className="subtitle">
+              Share your thoughts, suggestions, or anything on your mind.
+            </p>
+          </header>
+
+          <main className="grid">
+            <Card
+              title="User Login"
+              description="Login to access your account and manage your feedback."
+              link="/user/login"
+              linkText="Go to Login"
+            />
+            <Card
+              title="Community Board"
+              description="Read what others have shared and leave your own comment."
+              link="/community"
+              linkText="View / Add Comments"
+            />
+            <Card
+              title="Administration"
+              description="Internal area for managing user accounts and feedback."
+              link="/admin/panel"
+              linkText="Open Admin Area"
+            />
+          </main>
+
+          <footer>
+            <p>Mini Feedback System · For demonstration and learning purposes.</p>
+          </footer>
+        </div>
+      );
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
