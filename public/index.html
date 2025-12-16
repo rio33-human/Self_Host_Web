@@ -2,73 +2,54 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mini Feedback System</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div id="root"></div>
+    <div class="container">
+      <header>
+        <h1>Mini Feedback System</h1>
+        <p class="subtitle">
+          Share your thoughts, suggestions, or anything on your mind.
+        </p>
+      </header>
 
-    <!-- React + ReactDOM via CDN -->
-    <script
-      src="https://unpkg.com/react@18/umd/react.development.js"
-      crossorigin
-    ></script>
-    <script
-      src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
-      crossorigin
-    ></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <!-- Our React code -->
-    <script type="text/babel">
-      const Card = ({ title, description, link, linkText }) => (
-        <div className="card">
-          <h2>{title}</h2>
-          <p>{description}</p>
-          <a href={link} className="btn">
-            {linkText}
-          </a>
+      <main class="grid">
+        <div class="card">
+          <h2>User Login</h2>
+          <p>Login to access your account and manage your feedback.</p>
+          <a href="/user/login" class="btn">Go to Login</a>
         </div>
-      );
-
-      const App = () => (
-        <div className="container">
-          <header>
-            <h1>Mini Feedback System</h1>
-            <p className="subtitle">
-              Share your thoughts, suggestions, or anything on your mind.
-            </p>
-          </header>
-
-          <main className="grid">
-            <Card
-              title="User Login"
-              description="Login to access your account and manage your feedback."
-              link="/user/login"
-              linkText="Go to Login"
-            />
-            <Card
-              title="Community Board"
-              description="Read what others have shared and leave your own comment."
-              link="/community"
-              linkText="View / Add Comments"
-            />
-            <Card
-              title="Administration"
-              description="Internal area for managing user accounts and feedback."
-              link="/admin/panel"
-              linkText="Open Admin Area"
-            />
-          </main>
-
-          <footer>
-            <p>Mini Feedback System · For demonstration and learning purposes.</p>
-          </footer>
+        
+        <div class="card">
+          <h2>Community Board</h2>
+          <p>Read what others have shared and leave your own comment.</p>
+          <a href="/community" class="btn">View / Add Comments</a>
         </div>
-      );
+        
+        <div class="card">
+          <h2>Administration</h2>
+          <p>Internal area for managing user accounts and feedback.</p>
+          <a href="/admin/panel" class="btn">Open Admin Area</a>
+        </div>
+        
+        <div class="card">
+          <h2>Documents</h2>
+          <p>Browse and manage documents in the system.</p>
+          <a href="/documents/list" class="btn">View Documents</a>
+        </div>
+        
+        <div class="card">
+          <h2>Resources</h2>
+          <p>Access server resources and files.</p>
+          <a href="/api/file?file=index.html" class="btn">View Files</a>
+        </div>
+      </main>
 
-      const root = ReactDOM.createRoot(document.getElementById("root"));
-      root.render(<App />);
-    </script>
+      <footer>
+        <p>Mini Feedback System · For demonstration and learning purposes.</p>
+      </footer>
+    </div>
   </body>
 </html>

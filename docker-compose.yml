@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: selfhostweb-app
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+    # Note: Database is in-memory, so data will be lost when container stops
+    # To persist data, you would need to mount a volume and change app.js
+    # to use a file-based SQLite database instead of :memory:
+

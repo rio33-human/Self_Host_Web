@@ -2,6 +2,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
+const fs = require("fs");
 
 const app = express();
 const db = new sqlite3.Database(":memory:"); // in-memory DB for demo
@@ -101,6 +102,22 @@ db.run(
    VALUES ('bob', '${bobHash}', 'user', 'banned')`
 );
 
+  // Create documents table for IDOR vulnerability - REAL FUNCTIONAL TABLE
+  db.run(`
+    CREATE TABLE documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT,
+      content TEXT,
+      owner_id INTEGER,
+      is_private INTEGER DEFAULT 1
+    )
+  `);
+
+  // Seed some documents for IDOR testing - REAL DATA WITH SENSITIVE INFO
+  db.run(`INSERT INTO documents (title, content, owner_id, is_private) VALUES ('Admin Secret Notes', 'Password: admin123\nAPI Key: sk_live_abc123xyz\nDatabase credentials: admin/password', 1, 1)`);
+  db.run(`INSERT INTO documents (title, content, owner_id, is_private) VALUES ('Alice Personal Notes', 'My secret: I love chocolate\nBank account: 123456789\nSSN: 555-55-5555', 2, 1)`);
+  db.run(`INSERT INTO documents (title, content, owner_id, is_private) VALUES ('Willie Private Diary', 'Dear diary, today I learned about SQL injection...', 3, 1)`);
+  db.run(`INSERT INTO documents (title, content, owner_id, is_private) VALUES ('Public Announcement', 'This is a public document everyone can see', 1, 0)`);
 
   // Seed a topic
   db.run(
@@ -109,7 +126,7 @@ db.run(
   );
 });
 
-// ---------- HOME (React landing page) ----------
+// ---------- HOME (Static HTML landing page) ----------
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
@@ -188,7 +205,24 @@ const sql = `
 
   db.get(sql, (err, row) => {
     if (err) {
-      return res.send("DB error");
+      // ❌ VULNERABLE: Expose SQL error details for scanner detection
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Database Error</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Database Error</h1>
+      <p>An error occurred while processing your request.</p>
+      <a href="/user/login" class="btn">Return to Login</a>
+    </div>
+  </div>
+</body>
+</html>`);
     }
     if (!row) {
       return res.send(`<!DOCTYPE html>
@@ -244,16 +278,33 @@ const sql = `
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Welcome</title>
+  <title>Welcome - ${row.username}</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body class="page">
   <div class="page-container">
     <a href="/" class="back-link">← Back to Home</a>
     <div class="card card-page">
-      <h1 class="page-title">Welcome, ${row.username}</h1>
+      <h1 class="page-title">Welcome, ${row.username}!</h1>
       <p>You are logged in as <strong>${row.role}</strong> (status: ${row.status}).</p>
-      <p class="hint">You can now create topics and post comments in the community (unless banned).</p>
+      
+      <div style="margin-top: 1.5rem;">
+        <h2 class="section-title">Quick Links</h2>
+        <ul class="comment-list">
+          <li class="comment-item">
+            <a href="/user/profile/${row.id}" class="back-link">View My Profile</a>
+          </li>
+          <li class="comment-item">
+            <a href="/community" class="back-link">Community Topics</a>
+          </li>
+          <li class="comment-item">
+            <a href="/documents/list" class="back-link">Browse Documents</a>
+          </li>
+          ${row.role === 'admin' ? '<li class="comment-item"><a href="/admin/panel" class="back-link">Admin Panel</a></li>' : ''}
+        </ul>
+      </div>
+      
+      <p class="hint" style="margin-top: 1rem;">You can now create topics, post comments, and manage documents in the community (unless banned).</p>
     </div>
   </div>
 </body>
@@ -291,7 +342,7 @@ app.get("/community", (req, res) => {
       .map(
         (t) => `
       <li class="comment-item">
-        <div><strong>${t.title}</strong> by ${t.author}</div>
+        <div><strong>${t.title}</strong> by <a href="/user/profile/${t.author}" class="back-link">${t.author}</a></div>
         <div class="hint">${t.description || ""}</div>
         <div style="margin-top:0.4rem;">
           <a href="/community/topic/${t.id}" class="btn">Open Topic</a>
@@ -381,16 +432,55 @@ app.get("/community/topic/:id", (req, res) => {
   const commentsSql = `SELECT * FROM comments WHERE topic_id = ${topicId}`;
 
   db.get(topicSql, (err, topic) => {
-    if (err || !topic) return res.send("Topic not found or DB error");
+    if (err) {
+      // ❌ VULNERABLE: Expose SQL error for scanner detection
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Database Error</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Database Error</h1>
+      <p>An error occurred while loading the topic.</p>
+      <a href="/community" class="btn">Return to Topics</a>
+    </div>
+  </div>
+</body>
+</html>`);
+    }
+    if (!topic) return res.send("Topic not found or DB error");
 
     db.all(commentsSql, (err2, comments) => {
-      if (err2) return res.send("DB error");
+      if (err2) {
+        // ❌ VULNERABLE: Expose SQL error for scanner detection
+        return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Database Error</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Database Error</h1>
+      <p>An error occurred while loading comments.</p>
+      <a href="/community" class="btn">Return to Topics</a>
+    </div>
+  </div>
+</body>
+</html>`);
+      }
 
       const commentsHtml = comments
         .map(
           (c) => `
         <li class="comment-item">
-          <div><strong>${c.author}</strong> says:</div>
+          <div><strong><a href="/user/profile/${c.author}" class="back-link">${c.author}</a></strong> says:</div>
           <div>${c.content}</div>
           <div class="hint">
             Status: ${c.status || "normal"}
@@ -399,6 +489,7 @@ app.get("/community/topic/:id", (req, res) => {
                 ? `<span class="tag tag-warned">Warned</span>`
                 : ""
             }
+            ${currentUser ? ` | <a href="/comment/edit/${c.id}" class="back-link">Edit</a> | <a href="/comment/delete/${c.id}" class="back-link">Delete</a>` : ''}
           </div>
         </li>`
         )
@@ -513,7 +604,7 @@ app.get("/admin/panel", (req, res) => {
           (u) => `
         <tr>
           <td>${u.id}</td>
-          <td>${u.username}</td>
+          <td><a href="/user/profile/${u.id}" class="back-link">${u.username}</a></td>
           <td>${u.password}</td>
           <td>${u.role}</td>
           <td>${u.status}</td>
@@ -531,13 +622,14 @@ app.get("/admin/panel", (req, res) => {
           (c) => `
         <tr>
           <td>${c.id}</td>
-          <td>${c.topic_id}</td>
-          <td>${c.author}</td>
+          <td><a href="/community/topic/${c.topic_id}" class="back-link">Topic ${c.topic_id}</a></td>
+          <td><a href="/user/profile/${c.author}" class="back-link">${c.author}</a></td>
           <td>${c.content}</td>
           <td>${c.status || "normal"}</td>
           <td>
             <a href="/admin/comment/warn?id=${c.id}&role=admin" class="back-link">Warn</a> |
-            <a href="/admin/comment/delete?id=${c.id}&role=admin" class="back-link">Delete</a>
+            <a href="/admin/comment/delete?id=${c.id}&role=admin" class="back-link">Delete</a> |
+            <a href="/comment/edit/${c.id}" class="back-link">Edit</a>
           </td>
         </tr>`
         )
@@ -579,7 +671,7 @@ app.get("/admin/panel", (req, res) => {
         <thead>
           <tr>
             <th>ID</th>
-            <th>Topic ID</th>
+            <th>Topic</th>
             <th>Author</th>
             <th>Content</th>
             <th>Status</th>
@@ -590,6 +682,9 @@ app.get("/admin/panel", (req, res) => {
           ${commentsHtml || "<tr><td colspan='6'>No comments yet.</td></tr>"}
         </tbody>
       </table>
+
+      <h2 class="section-title" style="margin-top:2rem;">Documents</h2>
+      <p class="hint"><a href="/documents/list" class="back-link">View All Documents</a></p>
     </div>
   </div>
 </body>
@@ -606,10 +701,29 @@ app.get("/admin/user/ban", (req, res) => {
 
   if (roleParam !== "admin") return res.send("Access denied.");
 
-  // ❌ SQL injection possible via id
+  // ❌ SQL injection possible via id - VULNERABLE PATH #1
   const sql = `UPDATE users SET status = 'banned' WHERE id = ${id}`;
   db.run(sql, (err) => {
-    if (err) return res.send("DB error");
+    if (err) {
+      // ❌ VULNERABLE: Expose SQL error for scanner detection
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Database Error</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Database Error</h1>
+      <p>An error occurred while processing your request.</p>
+      <a href="/user/login" class="btn">Return to Login</a>
+    </div>
+  </div>
+</body>
+</html>`);
+    }
     res.redirect("/admin/panel?role=admin");
   });
 });
@@ -620,9 +734,29 @@ app.get("/admin/user/unban", (req, res) => {
 
   if (roleParam !== "admin") return res.send("Access denied.");
 
+  // ❌ SQL injection possible via id - VULNERABLE PATH #2
   const sql = `UPDATE users SET status = 'active' WHERE id = ${id}`;
   db.run(sql, (err) => {
-    if (err) return res.send("DB error");
+    if (err) {
+      // ❌ VULNERABLE: Expose SQL error for scanner detection
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Database Error</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Database Error</h1>
+      <p>An error occurred while processing your request.</p>
+      <a href="/user/login" class="btn">Return to Login</a>
+    </div>
+  </div>
+</body>
+</html>`);
+    }
     res.redirect("/admin/panel?role=admin");
   });
 });
@@ -633,9 +767,29 @@ app.get("/admin/user/mod", (req, res) => {
 
   if (roleParam !== "admin") return res.send("Access denied.");
 
+  // ❌ SQL injection possible via id - VULNERABLE PATH #3
   const sql = `UPDATE users SET role = 'moderator' WHERE id = ${id}`;
   db.run(sql, (err) => {
-    if (err) return res.send("DB error");
+    if (err) {
+      // ❌ VULNERABLE: Expose SQL error for scanner detection
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Database Error</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Database Error</h1>
+      <p>An error occurred while processing your request.</p>
+      <a href="/user/login" class="btn">Return to Login</a>
+    </div>
+  </div>
+</body>
+</html>`);
+    }
     res.redirect("/admin/panel?role=admin");
   });
 });
@@ -649,7 +803,26 @@ app.get("/admin/comment/delete", (req, res) => {
 
   const sql = `DELETE FROM comments WHERE id = ${id}`; // ❌ SQLi
   db.run(sql, (err) => {
-    if (err) return res.send("DB error");
+    if (err) {
+      // ❌ VULNERABLE: Expose SQL error for scanner detection
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Database Error</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Database Error</h1>
+      <p>An error occurred while processing your request.</p>
+      <a href="/user/login" class="btn">Return to Login</a>
+    </div>
+  </div>
+</body>
+</html>`);
+    }
     res.redirect("/admin/panel?role=admin");
   });
 });
@@ -662,8 +835,600 @@ app.get("/admin/comment/warn", (req, res) => {
 
   const sql = `UPDATE comments SET status = 'warned' WHERE id = ${id}`; // ❌ SQLi
   db.run(sql, (err) => {
-    if (err) return res.send("DB error");
+    if (err) {
+      // ❌ VULNERABLE: Expose SQL error for scanner detection
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Database Error</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Database Error</h1>
+      <p>An error occurred while processing your request.</p>
+      <a href="/user/login" class="btn">Return to Login</a>
+    </div>
+  </div>
+</body>
+</html>`);
+    }
     res.redirect("/admin/panel?role=admin");
+  });
+});
+
+// ---------- IDOR VULNERABILITIES (Insecure Direct Object Reference) ----------
+
+// ❌ IDOR VULNERABILITY #1: User profile endpoint - no authorization check
+// Users can access any user's profile by changing the user_id parameter
+app.get("/user/profile/:user_id", (req, res) => {
+  const userId = req.params.user_id;
+  
+  // ❌ VULNERABLE: No check if currentUser.id matches userId - anyone can view any profile
+  const sql = `SELECT id, username, role, status FROM users WHERE id = ${userId}`;
+  
+  db.get(sql, (err, user) => {
+    if (err) {
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Database Error</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Database Error</h1>
+      <p>An error occurred while processing your request.</p>
+      <a href="/user/login" class="btn">Return to Login</a>
+    </div>
+  </div>
+</body>
+</html>`);
+    }
+    
+    if (!user) {
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>User Not Found</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">User Not Found</h1>
+      <p>User ID ${userId} does not exist.</p>
+    </div>
+  </div>
+</body>
+</html>`);
+    }
+    
+    // Get user's documents and activity
+    db.all(`SELECT * FROM documents WHERE owner_id = ${user.id}`, (err2, userDocs) => {
+      // Get user ID for topics query - need to find user ID from username
+      db.all(`SELECT * FROM topics WHERE author = '${user.username.replace(/'/g, "''")}'`, (err3, userTopics) => {
+        db.all(`SELECT * FROM comments WHERE author = '${user.username.replace(/'/g, "''")}'`, (err4, userComments) => {
+          
+          const docsHtml = userDocs && userDocs.length > 0
+            ? userDocs.map(d => `<li class="comment-item"><a href="/documents/${d.id}" class="back-link">${d.title}</a> ${d.is_private ? '(Private)' : '(Public)'}</li>`).join('')
+            : '<li class="comment-item empty">No documents</li>';
+          
+          const topicsHtml = userTopics && userTopics.length > 0
+            ? userTopics.map(t => `<li class="comment-item"><a href="/community/topic/${t.id}" class="back-link">${t.title}</a></li>`).join('')
+            : '<li class="comment-item empty">No topics created</li>';
+          
+          const commentsHtml = userComments && userComments.length > 0
+            ? userComments.map(c => `<li class="comment-item"><a href="/community/topic/${c.topic_id}" class="back-link">Comment #${c.id}</a> in Topic ${c.topic_id}</li>`).join('')
+            : '<li class="comment-item empty">No comments posted</li>';
+
+          res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>User Profile - ${user.username}</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <a href="/" class="back-link">← Back to Home</a>
+    <div class="card card-page">
+      <h1 class="page-title">User Profile: ${user.username}</h1>
+      <p><strong>User ID:</strong> ${user.id}</p>
+      <p><strong>Username:</strong> ${user.username}</p>
+      <p><strong>Role:</strong> ${user.role}</p>
+      <p><strong>Status:</strong> ${user.status}</p>
+      
+      <h2 class="section-title" style="margin-top:1.5rem;">Documents (${userDocs ? userDocs.length : 0})</h2>
+      <ul class="comment-list">
+        ${docsHtml}
+      </ul>
+      
+      <h2 class="section-title" style="margin-top:1.5rem;">Topics Created (${userTopics ? userTopics.length : 0})</h2>
+      <ul class="comment-list">
+        ${topicsHtml}
+      </ul>
+      
+      <h2 class="section-title" style="margin-top:1.5rem;">Comments Posted (${userComments ? userComments.length : 0})</h2>
+      <ul class="comment-list">
+        ${commentsHtml}
+      </ul>
+      
+    </div>
+  </div>
+</body>
+</html>`);
+        });
+      });
+    });
+  });
+});
+
+// ❌ IDOR VULNERABILITY #2: Edit/Delete comments - no ownership check
+// Users can edit or delete any comment by changing the comment_id
+app.get("/comment/edit/:comment_id", (req, res) => {
+  const commentId = req.params.comment_id;
+  
+  if (!currentUser) {
+    return res.send("You must be logged in to edit comments.");
+  }
+  
+  // ❌ VULNERABLE: No check if comment belongs to currentUser - anyone can edit any comment
+  const sql = `SELECT * FROM comments WHERE id = ${commentId}`;
+  
+  db.get(sql, (err, comment) => {
+    if (err) {
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Database Error</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Database Error</h1>
+      <p>An error occurred while processing your request.</p>
+      <a href="/user/login" class="btn">Return to Login</a>
+    </div>
+  </div>
+</body>
+</html>`);
+    }
+    
+    if (!comment) {
+      return res.send("Comment not found.");
+    }
+    
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Edit Comment</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <a href="/community/topic/${comment.topic_id}" class="back-link">← Back to Topic</a>
+    <div class="card card-page">
+      <h1 class="page-title">Edit Comment</h1>
+      <p class="hint">Original Author: ${comment.author}</p>
+      <form method="POST" action="/comment/update/${commentId}" class="form">
+        <div class="form-group">
+          <label>Comment Content</label>
+          <textarea name="content" class="textarea">${comment.content}</textarea>
+        </div>
+        <button type="submit" class="btn wide">Update Comment</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>`);
+  });
+});
+
+app.post("/comment/update/:comment_id", (req, res) => {
+  const commentId = req.params.comment_id;
+  const newContent = sanitizeComment(req.body.content || "");
+  
+  if (!currentUser) {
+    return res.send("You must be logged in to update comments.");
+  }
+  
+  // ❌ VULNERABLE: No ownership check - anyone can update any comment
+  // Also vulnerable to SQL injection via commentId (numeric injection)
+  const sql = `UPDATE comments SET content = '${newContent.replace(/'/g, "''")}' WHERE id = ${commentId}`;
+  
+  db.run(sql, (err) => {
+    if (err) {
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Database Error</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Database Error</h1>
+      <p>An error occurred while processing your request.</p>
+      <a href="/user/login" class="btn">Return to Login</a>
+    </div>
+  </div>
+</body>
+</html>`);
+    }
+    
+    // Get topic_id to redirect
+    db.get(`SELECT topic_id FROM comments WHERE id = ${commentId}`, (err2, result) => {
+      if (err2 || !result) return res.send("Error redirecting");
+      res.redirect(`/community/topic/${result.topic_id}`);
+    });
+  });
+});
+
+// ❌ IDOR VULNERABILITY: Delete comment - no ownership check - REAL FUNCTIONAL ENDPOINT
+app.get("/comment/delete/:comment_id", (req, res) => {
+  const commentId = req.params.comment_id;
+  
+  if (!currentUser) {
+    return res.send("You must be logged in to delete comments.");
+  }
+  
+  // ❌ VULNERABLE: No ownership check - anyone can delete any comment
+  // First get the comment to find topic_id for redirect
+  const sql = `SELECT topic_id, author FROM comments WHERE id = ${commentId}`;
+  
+  db.get(sql, (err, comment) => {
+    if (err) {
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Database Error</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Database Error</h1>
+      <p>An error occurred while processing your request.</p>
+      <a href="/user/login" class="btn">Return to Login</a>
+    </div>
+  </div>
+</body>
+</html>`);
+    }
+    
+    if (!comment) {
+      return res.send("Comment not found.");
+    }
+    
+    // Delete the comment - NO AUTHORIZATION CHECK
+    const deleteSql = `DELETE FROM comments WHERE id = ${commentId}`;
+    db.run(deleteSql, (err2) => {
+      if (err2) {
+        return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Database Error</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Database Error</h1>
+      <p>An error occurred while deleting the comment.</p>
+      <a href="/community" class="btn">Return to Community</a>
+    </div>
+  </div>
+</body>
+</html>`);
+      }
+      
+      // Success - redirect back to topic
+      res.redirect(`/community/topic/${comment.topic_id}`);
+    });
+  });
+});
+
+// Documents list page - shows all documents
+app.get("/documents/list", (req, res) => {
+  const sql = `SELECT d.*, u.username as owner_name FROM documents d LEFT JOIN users u ON d.owner_id = u.id ORDER BY d.id`;
+  
+  db.all(sql, (err, docs) => {
+    if (err) {
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Database Error</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Database Error</h1>
+      <p>An error occurred while processing your request.</p>
+      <a href="/documents/list" class="btn">Return to Documents</a>
+    </div>
+  </div>
+</body>
+</html>`);
+    }
+    
+    const docsHtml = docs && docs.length > 0
+      ? docs.map(d => `
+        <li class="comment-item">
+          <div><strong><a href="/documents/${d.id}" class="back-link">${d.title}</a></strong></div>
+          <div class="hint">Owner: <a href="/user/profile/${d.owner_id}" class="back-link">${d.owner_name || 'Unknown'}</a> | ${d.is_private ? 'Private' : 'Public'}</div>
+        </li>`).join('')
+      : '<li class="comment-item empty">No documents found</li>';
+    
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Documents List</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <a href="/" class="back-link">← Back to Home</a>
+    <div class="card card-page">
+      <h1 class="page-title">All Documents</h1>
+      <p class="page-subtitle">Browse all available documents in the system.</p>
+      <ul class="comment-list" style="margin-top:1rem;">
+        ${docsHtml}
+      </ul>
+      ${currentUser ? `<p class="hint" style="margin-top:1rem;"><a href="/documents/create" class="back-link">Create New Document</a></p>` : ''}
+    </div>
+  </div>
+</body>
+</html>`);
+  });
+});
+
+// Create document page
+app.get("/documents/create", (req, res) => {
+  if (!currentUser) {
+    return res.send("You must be logged in to create documents.");
+  }
+  
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Create Document</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <a href="/documents/list" class="back-link">← Back to Documents</a>
+    <div class="card card-page">
+      <h1 class="page-title">Create New Document</h1>
+      <form method="POST" action="/documents/create" class="form">
+        <div class="form-group">
+          <label>Title</label>
+          <input name="title" class="input" placeholder="Document title" required />
+        </div>
+        <div class="form-group">
+          <label>Content</label>
+          <textarea name="content" class="textarea" placeholder="Document content" required></textarea>
+        </div>
+        <div class="form-group">
+          <label>
+            <input type="checkbox" name="is_private" value="1" checked />
+            Private Document
+          </label>
+        </div>
+        <button type="submit" class="btn wide">Create Document</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>`);
+});
+
+app.post("/documents/create", (req, res) => {
+  if (!currentUser) {
+    return res.send("You must be logged in to create documents.");
+  }
+  
+  const title = req.body.title || "Untitled";
+  const content = req.body.content || "";
+  const isPrivate = req.body.is_private ? 1 : 0;
+  
+  db.run(
+    `INSERT INTO documents (title, content, owner_id, is_private) VALUES (?, ?, ?, ?)`,
+    [title, content, currentUser.id, isPrivate],
+    function(err) {
+      if (err) return res.send("DB error: " + err.message);
+      res.redirect(`/documents/${this.lastID}`);
+    }
+  );
+});
+
+// ❌ IDOR VULNERABILITY #3: View private messages/documents by ID - REAL FUNCTIONAL ENDPOINT
+// Users can access any document by guessing/changing the document_id
+app.get("/documents/:document_id", (req, res) => {
+  const documentId = req.params.document_id;
+  
+  // ❌ VULNERABLE: No authorization check - any user can access any document
+  // No check if currentUser.id matches owner_id - REAL IDOR VULNERABILITY
+  const sql = `SELECT id, title, content, owner_id, is_private FROM documents WHERE id = ${documentId}`;
+  
+  db.get(sql, (err, doc) => {
+    if (err) {
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Database Error</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Database Error</h1>
+      <p>An error occurred while processing your request.</p>
+      <a href="/user/login" class="btn">Return to Login</a>
+    </div>
+  </div>
+</body>
+</html>`);
+    }
+    
+    if (!doc) {
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Document Not Found</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Document Not Found</h1>
+      <p>Document ID ${documentId} does not exist.</p>
+    </div>
+  </div>
+</body>
+</html>`);
+    }
+    
+    // Get owner username from users table
+    db.get(`SELECT username FROM users WHERE id = ${doc.owner_id}`, (err2, owner) => {
+      const ownerName = owner ? owner.username : `User ${doc.owner_id}`;
+      const currentUserName = currentUser ? currentUser.username : "Not logged in";
+      const currentUserId = currentUser ? currentUser.id : "N/A";
+      
+      res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Document - ${doc.title}</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <a href="/documents/list" class="back-link">← Back to Documents</a>
+    <div class="card card-page">
+      <h1 class="page-title">${doc.title}</h1>
+      <p><strong>Document ID:</strong> ${doc.id}</p>
+      <p><strong>Owner:</strong> <a href="/user/profile/${doc.owner_id}" class="back-link">${ownerName}</a> (User ID: ${doc.owner_id})</p>
+      <p><strong>Private Document:</strong> ${doc.is_private ? 'Yes' : 'No'}</p>
+      <div style="margin-top: 1rem; padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
+        <strong>Document Content:</strong>
+        <pre style="white-space: pre-wrap; margin-top: 0.5rem;">${doc.content}</pre>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`);
+    });
+  });
+});
+
+// ---------- PATH TRAVERSAL VULNERABILITIES ----------
+
+// ❌ PATH TRAVERSAL VULNERABILITY #1: File reading endpoint
+// User input is directly used to read files without sanitization
+app.get("/api/file", (req, res) => {
+  const fileName = req.query.file || "";
+  
+  if (!fileName) {
+    return res.send("Error: file parameter required. Usage: /api/file?file=filename");
+  }
+  
+  // ❌ VULNERABLE: Path traversal - no sanitization of fileName
+  // Attackers can use ../../../etc/passwd or similar to read arbitrary files
+  // path.join() normalizes paths, but path.resolve() allows traversal - MAKING IT ACTUALLY VULNERABLE
+  // This is a REAL path traversal vulnerability that actually works
+  const filePath = path.resolve(__dirname, "public", fileName);
+  
+  // Try to read the file - THIS ACTUALLY READS FILES FROM THE FILESYSTEM
+  fs.readFile(filePath, "utf8", (err, data) => {
+    if (err) {
+      return res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>File Read Error</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">File Read Error</h1>
+      <p>Error reading file: ${err.message}</p>
+    </div>
+  </div>
+</body>
+</html>`);
+    }
+    
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>File Contents</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">File Contents</h1>
+      <p><strong>File:</strong> ${fileName}</p>
+      <pre style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 0.5rem; overflow-x: auto;">${data}</pre>
+    </div>
+  </div>
+</body>
+</html>`);
+  });
+});
+
+// ❌ PATH TRAVERSAL VULNERABILITY #2: Template/include file reading
+// Another common path traversal pattern
+app.get("/include", (req, res) => {
+  const includeFile = req.query.page || "index.html";
+  
+  // ❌ VULNERABLE: Direct use of user input in file path - REAL PATH TRAVERSAL
+  // path.resolve() allows directory traversal sequences to work
+  // This is a REAL vulnerability that actually reads files outside the public directory
+  const includePath = path.resolve(__dirname, "public", includeFile);
+  
+  fs.readFile(includePath, "utf8", (err, content) => {
+    if (err) {
+      return res.send(`Error including file: ${err.message}`);
+    }
+    
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Included File</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page">
+  <div class="page-container">
+    <div class="card card-page">
+      <h1 class="page-title">Included File</h1>
+      <p><strong>File:</strong> ${includeFile}</p>
+      <pre style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 0.5rem; overflow-x: auto;">${content}</pre>
+    </div>
+  </div>
+</body>
+</html>`);
   });
 });
 
