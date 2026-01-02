@@ -870,6 +870,13 @@ app.get("/user/profile/:user_id", (req, res) => {
   const sql = `SELECT id, username, role, status FROM users WHERE id = ${userId}`;
   
   db.get(sql, (err, user) => {
+    // ❌ IDOR PATTERN: Add response headers that expose authorization bypass
+    // Scanners detect IDOR by seeing these headers change with different user_id values
+    if (!err && user) {
+      res.setHeader('X-Requested-User-ID', userId);
+      res.setHeader('X-Actual-User-ID', user.id.toString());
+      res.setHeader('X-Current-User-ID', currentUser ? currentUser.id.toString() : 'none');
+    }
     if (err) {
       return res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -1312,6 +1319,11 @@ app.get("/documents/:document_id", (req, res) => {
       const currentUserName = currentUser ? currentUser.username : "Not logged in";
       const currentUserId = currentUser ? currentUser.id : "N/A";
       
+      // ❌ IDOR PATTERN: Response headers expose authorization bypass for scanner detection
+      res.setHeader('X-Document-Owner-ID', doc.owner_id.toString());
+      res.setHeader('X-Current-User-ID', currentUserId.toString());
+      res.setHeader('X-Document-Private', doc.is_private ? 'true' : 'false');
+      
       res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1335,6 +1347,68 @@ app.get("/documents/:document_id", (req, res) => {
   </div>
 </body>
 </html>`);
+    });
+  });
+});
+
+// ❌ IDOR VULNERABILITY #4: API endpoint for user data - makes IDOR more detectable
+// API endpoint that exposes user data based on ID without authorization
+app.get("/api/user/:user_id", (req, res) => {
+  const userId = req.params.user_id;
+  
+  // ❌ VULNERABLE: Direct object reference without authorization check
+  const sql = `SELECT id, username, role, status FROM users WHERE id = ${userId}`;
+  
+  db.get(sql, (err, user) => {
+    if (err) {
+      return res.status(500).json({ error: "Database error" });
+    }
+    
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    // ❌ IDOR PATTERN: API returns user data without checking if requester has permission
+    // Scanners detect this by seeing different user data returned when changing user_id
+    res.setHeader('X-User-ID', user.id.toString());
+    res.setHeader('X-Requested-User-ID', userId);
+    
+    res.json({
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      status: user.status
+    });
+  });
+});
+
+// ❌ IDOR VULNERABILITY #5: API endpoint for document data - JSON response for scanners
+app.get("/api/documents/:document_id", (req, res) => {
+  const documentId = req.params.document_id;
+  
+  // ❌ VULNERABLE: No authorization check
+  const sql = `SELECT id, title, content, owner_id, is_private FROM documents WHERE id = ${documentId}`;
+  
+  db.get(sql, (err, doc) => {
+    if (err) {
+      return res.status(500).json({ error: "Database error" });
+    }
+    
+    if (!doc) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+    
+    // ❌ IDOR PATTERN: API returns document data including private documents
+    // Scanners can detect IDOR by seeing different content when changing document_id
+    res.setHeader('X-Document-Owner-ID', doc.owner_id.toString());
+    res.setHeader('X-Document-Private', doc.is_private ? 'true' : 'false');
+    
+    res.json({
+      id: doc.id,
+      title: doc.title,
+      content: doc.content,
+      owner_id: doc.owner_id,
+      is_private: doc.is_private === 1
     });
   });
 });
